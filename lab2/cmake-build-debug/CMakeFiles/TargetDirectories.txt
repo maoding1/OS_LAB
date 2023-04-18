@@ -1,0 +1,4 @@
+/home/mao/Desktop/os/lab2/cmake-build-debug/CMakeFiles/main.dir
+/home/mao/Desktop/os/lab2/cmake-build-debug/CMakeFiles/reference.dir
+/home/mao/Desktop/os/lab2/cmake-build-debug/CMakeFiles/edit_cache.dir
+/home/mao/Desktop/os/lab2/cmake-build-debug/CMakeFiles/rebuild_cache.dir
