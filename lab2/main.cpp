@@ -5,6 +5,8 @@
 #include <fstream>
 #include <string.h>
 #include <vector>
+#include <sstream>
+#include <regex>
 
 #define BPB_LENGTH 36
 #define ROOT_ENTRY_LENGTH 32
@@ -81,29 +83,32 @@ void ls(FILE *fat12);
 void ls_l(FILE *fat12);
 int getqname(const char*q, int st);
 bool validPathLetter(char ch);
+bool is_standard_file(RootEntry re);
+bool validFileName(char *fname_tmp, int pos);
 void lslr(FILE *fat12);
 void lsr(FILE *fat12);
 void solveCat(FILE *fat12);
 void getText(FILE *fat12, RootEntry re);
 void getTextEntry(FILE *fat12, RootEntry re, string tname);
+vector<string> split(char* str, char delimiter);
+string join(vector<string> tokens, char delimiter);
+bool isTXT(const std::string& filename);
 pair<int, int> solveRootFile(file cur, FILE *fat12);
 pair<int, int> getCnt(RootEntry re, FILE *fat12);
-//extern "C" void my_print(char *, int, int);
-void my_print(char *str, int length, int flag) {
-    for (int i=0; i < length; i++)
-        cout << str[i];
-    if (flag == 1)
-        cout << "(red)";
-}
+extern "C" void my_print(char *, unsigned int, int);
+//void my_print(char *str, int length, int flag) {
+//    for (int i=0; i < length; i++)
+//        cout << str[i];
+//    if (flag == 1)
+//        cout << "(red)";
+//}
 //检查是否为文件
 bool is_standard_file(RootEntry re) {
     return re.attr == 0x01 || re.attr == 0x10 || re.attr == 0x20;
 }
 
-bool validFileName(char *fname_tmp, int pos)
-{
-    for (int j = pos; j < pos + 11; j++)
-    {
+bool validFileName(char *fname_tmp, int pos) {
+    for (int j = pos; j < pos + 11; j++) {
         if (!(((fname_tmp[j] >= 48) && (fname_tmp[j] <= 57)) ||
               ((fname_tmp[j] >= 65) && (fname_tmp[j] <= 90)) ||
               ((fname_tmp[j] >= 97) && (fname_tmp[j] <= 122)) ||
@@ -111,6 +116,30 @@ bool validFileName(char *fname_tmp, int pos)
             return false;
     }
     return true;
+}
+//返回用delimiter分隔的字符串str的vector容器
+vector<string> split(char* str, char delimiter) {
+    vector<string> tokens;
+    istringstream iss(str);
+    string token;
+    while (getline(iss, token, delimiter)) {
+        if (token != "")
+            tokens.push_back(token);
+    }
+    return tokens;
+}
+
+string join(vector<string> tokens, char delimiter) {
+    string ret = "";
+    for (const string& token : tokens) {
+        ret = ret + delimiter + token;
+    }
+    return ret;
+}
+
+bool isTXT(const string& filename) {
+    std::regex pattern(R"((.*).TXT)", std::regex::icase);
+    return std::regex_match(filename, pattern); // 返回是否匹配成功
 }
 int get_BPB_info() {
     BytesPerSec = bpb.BPB_BytesPerSec;
@@ -460,7 +489,7 @@ void ls_l(FILE *fat12) {
         my_print("\n", 1, 0);
     }
 }
-//返回0命令出错, 返回1代表命令中没有-l, 返回2代表命令中有-l 并把命令中的路径部分存储到qfroot中
+//返回0命令出错, 返回1代表命令中有-l, 返回2代表命令中没有-l 并把命令中的路径部分存储到qfroot中
 int getqname(const char*q, int pos) {
     int len = strlen(q);
     int dot = 0;
@@ -469,23 +498,50 @@ int getqname(const char*q, int pos) {
     bool ls = true;
     char wrongMessage[50] = "Not a legal command!\n";
     for (j = pos; j < len; j++) {
-        if (q[j] == '.') {
-            if (dot == 0)
-                dot = 1;
-            else {
-                char wrongmessage1[50] = "Wrong file path!\n";
-                my_print(wrongmessage1, strlen(wrongmessage1), 1);
-                return 0;
-            }
-        } else if (q[j] == ' ')
+        if (q[j] == ' ')
             break;
         else if (!validPathLetter(q[j])) {
             char wrongmessage2[50] = "Please enter uppercase of path!\n";
             my_print(wrongmessage2, strlen(wrongmessage2), 1);
+            return 0;
         }
         qfroot[qlen++] = q[j];
     }
     qfroot[qlen] = '\0';
+    //检查路径是否合法
+    vector<string> dirs = split(qfroot, '/');
+    vector<string> curRoad;
+    for (string dir : dirs) {
+        if (dir == ".")
+            continue;
+        else if (dir == "..") {
+            if(!curRoad.empty())
+                curRoad.pop_back();
+            continue;
+        }
+        curRoad.push_back(dir);
+        //检查当前路径是否存在
+        if (isTXT(dir))
+            continue;
+        string tmpRoad = join(curRoad, '/');
+        if (tmpRoad == "") //是根目录
+            continue;
+        bool exist = false;
+        for (file _file : fileTree) {
+            string fileRoad = string(_file.roadName) + string(_file.fileName);
+            if (fileRoad == tmpRoad) {
+                exist = true;
+                break;
+            }
+        }
+        if (!exist) {
+            char wrongmessage3[50] = "wrong file path!Dir not exist!\n";
+            my_print(wrongmessage3, strlen(wrongmessage3), 1);
+            return 0;
+        }
+    }
+    string real_road = join(curRoad, '/');
+    sprintf(qfroot, "%s", real_road.c_str());
     //去除路径后的空格
     while (j < len && q[j] == ' ')
         j++;
@@ -517,12 +573,17 @@ int getqname(const char*q, int pos) {
 }
 //检查ch是不是合法的路径字符
 bool validPathLetter(char ch) {
-    if (ch == '/' || (ch <= 'Z' && ch >= 'A') || (ch <= '9' && ch >= '0'))
+    if (ch == '/' || (ch <= 'Z' && ch >= 'A') || (ch <= '9' && ch >= '0') || ch == '.')
         return true;
     return false;
 }
 //TODO: 算法可能有错误 主要是没有递归输出所有
 void lslr(FILE *fat12) {
+    //判断路径是不是根目录
+    if (strcmp(qfroot, "") == 0) {
+        ls_l(fat12);
+        return;
+    }
     bool isFind = false;
     for (auto _file : fileTree) {
         char tmp[50];
@@ -571,6 +632,11 @@ void lslr(FILE *fat12) {
 }
 
 void lsr(FILE *fat12) {
+    //判断路径是不是根目录
+    if (strcmp(qfroot, "") == 0) {
+        ls(fat12);
+        return;
+    }
     bool isFind = false;
     for (auto _file: fileTree) {
         char tmp[50];
@@ -600,10 +666,10 @@ void solveCat(FILE *fat12) {
     string str = qfroot, sroot = "", stext = "";
     bool flag = 0;
     int pos = str.rfind('/');
-    if (pos < 0) {
-        stext = str;
+    if (pos <= 0) {
+        stext = pos < 0 ? str : str.substr(pos+1);
         for (auto _file : rootFiles) {
-            if (strcmp(_file.fileName, qfroot) == 0) {
+            if (strcmp(_file.fileName, stext.c_str()) == 0) {
                 getText(fat12, _file.fileEntry);
                 flag = 1;
                 break;

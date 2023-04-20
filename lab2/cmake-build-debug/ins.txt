@@ -1,1 +1,1 @@
-ls /HOUSE/./
+cat /NJU/ABOUT.TXT

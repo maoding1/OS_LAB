@@ -1,5 +1,7 @@
 all:
 	nasm -f elf32 my_print.asm
-	g++ -o fat -m32 main.cpp my_print.o
+	g++ -o main -m32 -w main.cpp my_print.o
 run: 
-	./fat
+	./main
+clean:
+	rm -f my_print.o main.o main 
