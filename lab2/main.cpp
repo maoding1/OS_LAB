@@ -300,6 +300,9 @@ void parsecmd(FILE *fat12, char *cmd) {
                 if (i == len) { //是 ls -l 后面没有文件名
                     ls_l(fat12);
                     return;
+                } else if (cmd[i] == '/'){ //ls -l 后面加了路径
+                    getqname(cmd, i);
+                    lslr(fat12);
                 }
             } else { // -l后有多余的字符
                 char wrongMessage2[50] = "Not a legal command!\n";
@@ -661,7 +664,6 @@ void lsr(FILE *fat12) {
         my_print(wrongmessage, strlen(wrongmessage), 0);
     }
 }
-//TODO 查找文件方法可能有错误
 void solveCat(FILE *fat12) {
     string str = qfroot, sroot = "", stext = "";
     bool flag = 0;
